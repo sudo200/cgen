@@ -1,0 +1,464 @@
+#!/bin/sh
+
+######################
+#                    #
+#        cgen        #
+#                    #
+######################
+#    A POSIX shell   #
+#      script for    #
+# generating a basic #
+#     c/c++ code     #
+#      structure     #
+######################
+#                    #
+#    sudo200 2022    #
+#                    #
+######################
+
+################
+#   Structure  #
+################
+#
+# ~ ... File/Dir excluded from VCS
+#
+#
+# <pjt-name>/
+#  |
+#  +- src/
+#  |
+#  +- test/
+#  |
+#  +- include/
+#  |
+#  +- lib/
+#  |   |
+#  |   +- bin/
+#  |   |
+#  |   +- include/
+#  |   |
+#  |   +- libs.mk
+#  |
+#  +- bin/~
+#  |
+#  +- obj/~
+#  |
+#  +- .gitignore
+#  |
+#  +- (UN)LICENSE
+#  |
+#  +- README.md
+#  |
+#  +- Makefile
+#  |
+#  +- config.mk
+#
+
+
+#############
+# {{{ user-vars
+
+DEFAULT_LANG='C'
+DEFAULT_TYPE='Executable'
+DEFAULT_LINKING='Dynamic'
+
+DEFAULT_MKDIR='Yes'
+DEFAULT_GIT='Yes'
+
+# }}}
+#############
+
+VERSION='v1.0'
+
+version() {
+  printf '%s\n\n' "cgen $VERSION"
+}
+
+# {{{ utility functions
+
+read_() {
+  read $@ s < /dev/tty
+  printf '%s' "$s"
+}
+
+contains() {
+  echo "$1" | grep -w -q "$2" && return 0 || return 1
+}
+
+is_number() {
+  [ -n "$1" -a $1 -eq $1 2> /dev/null ]
+  return $?
+}
+
+lower() {
+  tr '[:upper:]' '[:lower:]'
+}
+
+upper() {
+  tr '[:lower:]' '[:upper:]'
+}
+
+selection_menu() {
+  input="$(tr '[:space:]' '\n')"
+
+  option=""
+  if [ -n "$1" ]; then
+    option="$1"
+  fi
+
+  default=""
+  if [ -n "$2" ]; then
+    default="$2"
+  fi
+
+  option="$option ["
+  i=1
+  for token in $input; do
+    option="$option $i. $token; "
+    i=$((i + 1))
+  done
+  option="$option]: "
+
+
+  while true; do
+    read -p "$option" choice < /dev/tty;
+
+    if is_number "$choice" && [ $choice -gt 0 -a $choice -lt $i ]; then # Valid
+      printf '%s' "$(echo "$input" | tr '\n' '\t' | cut -f "$choice")"
+      return 0
+    fi
+
+    if [ -z "$choice" -a -n "$default" ]; then
+      printf '%s' "$default"
+      return 0
+    fi
+
+    echo 'Please enter one of the choices' > /dev/tty
+  done
+}
+
+yesno() {
+  if [ -z "$1" ]; then
+    return 3
+  fi
+
+  if [ "$(echo "$1" | tr '[:upper:]' '[:lower:]')" = 'yes' ]; then
+    return 0
+  elif [ "$(echo "$1" | tr '[:upper:]' '[:lower:]')" = 'no' ]; then
+    return 1
+  else
+    return 2
+  fi
+}
+
+# }}}
+
+get_license() {
+  echo 'This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <http://unlicense.org/>
+' > UNLICENSE
+}
+
+get_readme() {
+  printf '# %s\n\n%s\n' "$1" "$2" > README.md
+}
+
+get_gitignore() {
+  echo 'bin/
+obj/
+' > .gitignore
+}
+
+make_c_cxx_dir_structure() {
+  mkdir -p 'src' 'include' 'lib/bin' 'lib/include' 'test'
+}
+
+# {{{ Hello, World!-code
+
+get_c_exec_hello_world() {
+  echo '#include <stdio.h>
+
+int main(void)
+{
+  printf("Hello, World!\\n");
+
+  return 0;
+}
+' > src/main.c
+}
+
+get_cxx_exec_hello_world() {
+  echo '#include <iostream>
+
+int main() {
+  std::cout << "Hello, World!" << std::endl;
+
+  return 0;
+}
+' > src/main.cpp
+}
+
+get_c_lib_hello_world() {
+  echo '#include <stdio.h>
+
+#include "lib.h"
+
+void hello(void)
+{
+  printf("Hello, World!\\n");
+}
+' > src/lib.c
+
+  echo '#ifndef __LIB_H___
+#define __LIB_H___
+
+void hello(void);
+
+#endif//__LIB_H___
+' > include/lib.h
+}
+
+get_cxx_lib_hello_world() {
+  echo '#include <iostream>
+
+#include "lib.hpp"
+
+namespace lib {
+  void hello() {
+    std::cout << "Hello, World!" << std::endl;
+  }
+}
+' > src/lib.cpp
+  echo '#ifndef __LIB_HPP___
+#define __LIB_HPP___
+
+namespace lib {
+  void hello();
+}
+
+#endif//__LIB_HPP___
+' > include/lib.hpp
+}
+
+get_hello_world() {
+  lang="$1"
+  type="$2"
+
+  if [ -z "$lang" -o -z "$type" ]; then
+    return 1
+  fi
+
+  case "$lang" in
+    'C')
+      case "$type" in
+        'Executable')
+          get_c_exec_hello_world
+          ;;
+        'Library')
+          get_c_lib_hello_world
+          ;;
+      esac
+      ;;
+
+    'C++')
+      case "$type" in
+        'Executable')
+          get_cxx_exec_hello_world
+          ;;
+        'Library')
+          get_cxx_lib_hello_world
+          ;;
+      esac
+      ;;
+  esac
+}
+# }}}
+
+# {{{ Makefile
+
+get_config_file() {
+  options="-Wall -fPIC -g -I'include'"
+
+  echo "CC = cc
+CXX = c++
+OBJCOPY = objcopy
+AR = ar
+MKDIR = mkdir -p
+RM = rm -f
+
+CPPFLAGS += $options
+CFLAGS += \$(CPPFLAGS)
+CXXFLAGS += \$(CPPFLAGS)
+LDFLAGS += $([ "$1" = "Static" ] && printf '%s' '-static')
+" > config.mk
+}
+
+get_libs_file() {
+  echo "CPPFLAGS += -I'libs/include'
+" > lib/libs.mk
+}
+
+get_makefile_include() {
+  echo "include config.mk
+include lib/libs.mk"
+echo ''
+}
+
+get_makefile_base() {
+  echo "
+clean:
+\t\$(RM) -r out
+\t\$(RM) -r obj
+
+out:
+\t\$(MKDIR) out
+
+obj:
+\t\$(MKDIR) obj
+
+.PHONY: clean all
+"
+}
+
+get_cxx_exec_makefile() {
+  get_config_file "$1"
+  get_libs_file
+
+  echo "$(get_makefile_include)
+all: out/$2
+
+out/$2: obj/main.c$([ "$3" = 'C++' ] && printf '%s' 'pp').o out
+\t\$(CXX) \$(LDFLAGS) -o'out/$2' \$(wildcard obj/*.o) \$(wildcard lib/bin/*.a)
+\t\$(OBJCOPY) --only-keep-debug 'out/$2' 'out/$2.dbg'
+\tchmod -x 'out/$2.dbg'
+\t\$(OBJCOPY) --strip-unneeded 'out/$2'
+\t\$(OBJCOPY) --add-gnu-debuglink='out/$2.dbg' 'out/$2'
+
+obj/%.cpp.o: obj src/%.cpp
+\t\$(CXX) -c -o'\$@' 'src/\$(patsubst obj/%.cpp.o,%,\$@).cpp' \$(CXXFLAGS)
+
+obj/%.c.o: obj src/%.c
+\t\$(CC) -c -o'\$@' 'src/\$(patsubst obj/%.c.o,%,\$@).c' \$(CFLAGS)
+$(get_makefile_base)" > Makefile
+}
+
+get_cxx_static_lib_makefile() {
+  echo \
+"\t\$(AR) -cr out/$1.a \$(wildcard obj/*.o) \$(wildcard lib/bin/*.a)"
+}
+
+get_cxx_dynamic_lib_makefile() {
+  echo \
+"\t\$(CXX) -shared \$(LDFLAGS) -o'out/$1.so' \$(wildcard obj/*.o) \$(wildcard lib/bin/*.a)
+\t\$(OBJCOPY) --only-keep-debug 'out/$1.so' 'out/$1.so.dbg'
+\tchmod -x out/$1.so*
+\t\$(OBJCOPY) --strip-unneeded 'out/$1.so'
+\t\$(OBJCOPY) --add-gnu-debuglink='out/$1.so.dbg' 'out/$1.so.dbg'"
+}
+
+get_cxx_lib_makefile() {
+  get_config_file "$1"
+  get_libs_file
+
+  ext="$([ "$1" = "Static" ] && printf '%s' 'a' || printf '%s' 'so')"
+
+  echo "$(get_makefile_include)
+all: out/lib$(echo "$2" | lower).$ext
+
+out/lib$(echo "$2" | lower).$ext: out obj/lib.c$([ "$3" = 'C++' ] && printf '%s' 'pp').o
+$([ "$1" = "Static" ] && get_cxx_static_lib_makefile "$(echo "$2" | lower)" || get_cxx_dynamic_lib_makefile "$(echo "$2" | lower)" )
+
+obj/%.cpp.o: obj src/%.cpp
+\t\$(CXX) -c -o'\$@' 'src/\$(patsubst obj/%.cpp.o,%,\$@).cpp' \$(CXXFLAGS)
+
+obj/%.c.o: obj src/%.c
+\t\$(CC) -c -o'\$@' 'src/\$(patsubst obj/%.c.o,%,\$@).c' \$(CFLAGS)
+$(get_makefile_base)" > Makefile
+}
+
+get_make_file() {
+  lang="$1"
+  type="$2"
+  linking="$3"
+  name="$4"
+
+  if [ -z "$lang" -o -z "$type" -o -z "$linking" -o -z "$name" ]; then
+    return 1
+  fi
+
+      case "$type" in
+        'Executable')
+          get_cxx_exec_makefile "$linking" "$name" "$lang"
+          ;;
+        'Library')
+          get_cxx_lib_makefile "$linking" "$name" "$lang"
+          ;;
+      esac
+}
+#}}}
+
+main() {
+  version
+
+  read -p 'Name: ' name;
+  while [ -z "$name" ]; do
+    echo 'Name cannot be empty!' 1>&2
+    read -p 'Name: ' name;
+  done
+
+  read -p 'Description: ' description;
+  
+  lang="$(echo 'C\nC++' | selection_menu 'Language?' "$DEFAULT_LANG")"
+  type="$(echo 'Executable\nLibrary' | selection_menu 'Type?' "$DEFAULT_TYPE")"
+  linking="$(echo 'Static\nDynamic' | selection_menu 'Linking?' "$DEFAULT_LINKING")"
+  create_dir="$(echo 'Yes\nNo' | selection_menu 'Create new directory?' "$DEFAULT_MKDIR")"
+  create_git_repo="$(echo 'Yes\nNo' | selection_menu 'Create git repository?' "$DEFAULT_GIT")"
+
+  if yesno "$create_dir"; then
+    mkdir "$name"
+    cd "$name"
+  fi
+
+  if [ "$lang" = 'C' -o "$lang" = 'C++' ]; then
+    make_c_cxx_dir_structure
+    get_license "$license"
+    get_readme "$name" "$description"
+    get_gitignore
+    get_hello_world "$lang" "$type"
+    get_make_file "$lang" "$type" "$linking" "$name"
+  else
+    echo "No language called '$lang'!\nHow did you get here?" 1>&2
+    exit 1
+  fi
+
+  if yesno "$create_git_repo"; then
+    git init 2>&1 > /dev/null
+    git add . 2>&1 > /dev/null
+    git commit -m 'Initial commit' 2>&1 > /dev/null
+  fi
+}
+
+main $@
+
