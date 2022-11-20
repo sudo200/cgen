@@ -299,7 +299,7 @@ get_hello_world() {
 # {{{ Makefile
 
 get_config_file() {
-  options="-Wall -fPIC -g -I'include'"
+  options="-Wall -fPIC -g -I'include' -pipe"
 
   echo "CC = cc
 CXX = c++
