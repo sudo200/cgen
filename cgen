@@ -364,6 +364,16 @@ obj/%.c.o: obj src/%.c
 $(get_makefile_base)" > Makefile
 }
 
+get_cxx_lib_name() {
+  case "$([ -n "$1" ] && printf '%s' "$1" || cat)" in
+    lib*)
+      ;;
+    *)
+    printf 'lib'
+    ;;
+  esac
+}
+
 get_cxx_static_lib_makefile() {
   echo \
 "\t\$(AR) -cr out/$1.a \$(wildcard obj/*.o) \$(wildcard lib/bin/*.a)"
@@ -371,11 +381,11 @@ get_cxx_static_lib_makefile() {
 
 get_cxx_dynamic_lib_makefile() {
   echo \
-"\tif [ -n '\$(wildcard obj/*.cpp.o)' ]; then \$(CXX) -shared \$(LDFLAGS) -o'out/lib$1.so' \$(wildcard obj/*.o) \$(wildcard lib/bin/*.a); else \$(CC) -shared \$(LDFLAGS) -o'out/lib$1.so' \$(wildcard obj/*.o) \$(wildcard lib/bin/*.a); fi
-\t\$(OBJCOPY) --only-keep-debug 'out/lib$1.so' 'out/lib$1.so.dbg'
-\tchmod -x out/lib$1.so*
-\t\$(OBJCOPY) --strip-unneeded 'out/lib$1.so'
-\t\$(OBJCOPY) --add-gnu-debuglink='out/lib$1.so.dbg' 'out/lib$1.so.dbg'"
+"\tif [ -n '\$(wildcard obj/*.cpp.o)' ]; then \$(CXX) -shared \$(LDFLAGS) -o'out/$1.so' \$(wildcard obj/*.o) \$(wildcard lib/bin/*.a); else \$(CC) -shared \$(LDFLAGS) -o'out/$1.so' \$(wildcard obj/*.o) \$(wildcard lib/bin/*.a); fi
+\t\$(OBJCOPY) --only-keep-debug 'out/$1.so' 'out/$1.so.dbg'
+\tchmod -x out/$1.so*
+\t\$(OBJCOPY) --strip-unneeded 'out/$1.so'
+\t\$(OBJCOPY) --add-gnu-debuglink='out/$1.so.dbg' 'out/$1.so.dbg'"
 }
 
 get_cxx_lib_makefile() {
@@ -385,10 +395,10 @@ get_cxx_lib_makefile() {
   ext="$([ "$1" = "Static" ] && printf '%s' 'a' || printf '%s' 'so')"
 
   echo "$(get_makefile_include)
-all: out/lib$(echo "$2" | lower).$ext
+all: out/$(get_cxx_lib_name "$2")$(echo "$2" | lower).$ext
 
-out/lib$(echo "$2" | lower).$ext: out obj/lib.c$([ "$3" = 'C++' ] && printf '%s' 'pp').o
-$([ "$1" = "Static" ] && get_cxx_static_lib_makefile "$(echo "$2" | lower)" || get_cxx_dynamic_lib_makefile "$(echo "$2" | lower)" )
+out/$(get_cxx_lib_name "$2")$(echo "$2" | lower).$ext: out obj/lib.c$([ "$3" = 'C++' ] && printf '%s' 'pp').o
+$([ "$1" = "Static" ] && get_cxx_static_lib_makefile "$(echo "$2" | lower | get_cxx_lib_name)" || get_cxx_dynamic_lib_makefile "$(echo "$2" | lower | get_cxx_lib_name)" )
 
 obj/%.cpp.o: obj src/%.cpp
 \t\$(CXX) -c -o'\$@' 'src/\$(patsubst obj/%.cpp.o,%,\$@).cpp' \$(CXXFLAGS)
