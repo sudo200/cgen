@@ -39,7 +39,7 @@
 #  |   |
 #  |   +- libs.mk
 #  |
-#  +- bin/~
+#  +- out/~
 #  |
 #  +- obj/~
 #  |
@@ -186,7 +186,7 @@ get_readme() {
 }
 
 get_gitignore() {
-  echo 'bin/
+  echo 'out/
 obj/
 ' > .gitignore
 }
