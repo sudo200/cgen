@@ -432,11 +432,15 @@ get_make_file() {
 main() {
   version
 
-  read -p 'Name: ' name;
-  while [ -z "$name" ]; do
-    echo 'Name cannot be empty!' 1>&2
+  name="$1"
+
+  if [ -z "$name" ]; then
     read -p 'Name: ' name;
-  done
+    while [ -z "$name" ]; do
+      echo 'Name cannot be empty!' 1>&2
+      read -p 'Name: ' name;
+    done
+  fi
 
   read -p 'Description: ' description;
   
